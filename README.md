@@ -1,111 +1,190 @@
+# Cipher Courier 🏃‍♂️💨
 
-# Cipher Courier — Prototype
+A fast-paced, lightweight endless runner set in the neon megacity of **Lattice-9**. Navigate corporate firewalls, collect encrypted data shards, and solve Sudoku-style lock puzzles to liberate the city's network from monopolistic control.
 
-A lightweight, browser-first endless runner with cryptography-flavored progression and optional Sudoku-style lock-puzzles designed to run smoothly on low-end Linux laptops with minimal assets and no frameworks.
+## 🎮 Play Now
 
-### Overview
+**Live Game:** [https://YOUR-USERNAME.github.io/cipher-courier](https://YOUR-USERNAME.github.io/cipher-courier)
 
-Cipher Courier blends quick-run arcade traversal with shard collection, relay banking, and between-run upgrades, plus compact 4×4 lock-puzzles for permanent bonuses using a simple validation engine.[4]
-Persistence is handled entirely client-side using the Web Storage API (localStorage), so progress survives refreshes and offline sessions in typical browser configurations.[3][4]
+*(Replace `YOUR-USERNAME` with your actual GitHub username)*
 
-### Quick start (local)
+## 🚀 Features
 
-- Option 1: Open index.html directly in a modern browser for a zero-setup preview suitable for quick iteration on low-spec machines.
-- Option 2: Serve the folder with any lightweight static server (Python/Node/PHP) and open the local address shown by the server for consistent asset and storage behavior across browsers.[4]
+### Core Gameplay
+- **Endless Runner**: Auto-scrolling cyberpunk cityscape with smooth 60fps gameplay
+- **Jump & Slide**: Responsive controls with advanced movement upgrades
+- **Obstacle Variety**: Dodge firewalls, drones, and security barriers
+- **Shard Collection**: Gather key-shards for upgrades and progression
+- **Relay Banking**: Save progress mid-run at network relay nodes
 
-Example (Python 3):
-```bash
-cd cipher-courier
-python3 -m http.server 8000
-# open the local server address in the browser
+### Progression System
+- **4 Upgrades**: Double Jump, Coyote Time, Slide Optimization, Encryption Tier I
+- **3 Districts**: East Grid → Central Hub → West Sector
+- **Persistent Progress**: All data saved locally in browser
+- **High Score Tracking**: Beat your personal best
+
+### Lock Puzzles
+- **3 Sudoku-style Puzzles**: 4×4 grids with unique constraints
+- **Upgrade Rewards**: Solve puzzles to unlock permanent abilities
+- **Brain Break**: Optional cognitive challenges between action runs
+
+## 🎯 Controls
+
+| Action | Key/Input |
+|--------|-----------|
+| Jump | `Space`, `Up Arrow`, or `Click` |
+| Slide | `Down Arrow` |
+| Restart | `R` (when game over) |
+| Safehouse | `S` (from menu) |
+| Pause/Menu | `Escape` |
+
+## 🏗️ GitHub Pages Setup
+
+### Quick Deploy (5 minutes)
+
+1. **Fork/Download** this repository to your GitHub account
+2. **Go to Settings** → **Pages** in your repository
+3. **Set Source** to "Deploy from a branch"
+4. **Choose Branch**: `main` and **Folder**: `/ (root)`
+5. **Save** and wait 2-3 minutes
+6. **Visit**: `https://YOUR-USERNAME.github.io/REPOSITORY-NAME`
+
+### Files Included
+
 ```
-
-### Controls
-
-- Jump: Space or Up Arrow or Click.
-- Slide: Down Arrow.
-- Restart: R (on game over).
-- Safehouse: S (menu).
-- Pause/Menu: Esc.
-
-### Project structure
-
-- index.html — main entrypoint, canvas setup, HUD, safehouse and puzzle tabs.
-- game.js — core runner loop, physics, spawners, collisions, relay banking, persistence.
-- puzzle.js — 4×4 Sudoku-style lock puzzle engine with validation and reward callback.
-- README.md — usage, deployment, testing, performance, and contribution notes.
-
-### Features implemented
-
-- Core runner: auto-move, jump/slide, delta-timed loop using browser animation callbacks for smooth frame pacing.[5][6]
-- Obstacles and collectibles: firewalls, drones, barriers; key-shard pickups with simple particles and counters.
-- Relay banking and persistence: bank shards mid-run and save upgrades/progress in localStorage keys bound to origin.[7][3]
-- Upgrades: double jump, coyote time, slide cancel, encryption tier behavior for minor hazards.
-- Puzzles: three 4×4 grids with row/column/region constraints and unlock rewards via a solve callback.
-- Accessibility: high-contrast toggle, keyboard-friendly menus, reduced motion-friendly visuals by design.
-
-### Data persistence
-
-- Storage: uses window.localStorage for banked shards, unlocked upgrades, district progress, and settings, which persist across sessions for the same origin and protocol.[3][7]
-- Notes: some browsers restrict persistence in certain privacy modes or non-http(s) origins, which can raise SecurityError for storage; serving via a local server avoids origin edge cases.[8][3]
-
-### Performance
-
-- Rendering: requestAnimationFrame loop with delta timing, which pauses in inactive tabs for better battery life and CPU usage.[6][5]
-- Asset discipline: minimal vector-like drawing and tiny audio placeholders recommended to keep initial load responsive on low-end systems.
-- Storage events: optional syncing across tabs can listen to the storage event if needed for future multi-tab coordination.[9][4]
-
-### Deployment — GitHub Pages
-
-- Simple path: push the repository with index.html at the root, then in Settings → Pages select “Deploy from a branch” and choose main with root folder for automatic static hosting.[1][2]
-- Workflow path: alternatively, configure a GitHub Actions workflow to publish to a gh-pages branch and set Pages to deploy from that branch in Settings → Pages if continuous deploys are preferred.[10][2]
-
-Recommended minimal workflow (if using a gh-pages branch):
-```yaml
-name: Deploy to GitHub Pages
-on:
-  push:
-    branches: [ main ]
-permissions:
-  contents: write
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./
+cipher-courier/
+├── index.html       # Main game page (complete with CSS)
+├── game.js          # Core game engine
+├── puzzle.js        # Sudoku puzzle system
+├── .nojekyll        # Ensures GitHub Pages works properly
+└── README.md        # This file
 ```
-
-- After enabling Pages, the public site address is shown in the repository’s Pages settings, and it may take a few minutes to propagate after a push.[2][1]
-
-### Testing checklist
-
-- Functional: jump/slide responsiveness, obstacle collision, shard pickup, relay banking, game over and restart flow.
-- Persistence: upgrades and banked shards remain after refresh and between sessions within the same origin.[3][4]
-- Puzzle: 4×4 puzzles validate only on correct solutions and trigger solveCallback to grant the expected reward.
-- Performance: holds smooth animation pacing at typical refresh rates or degrades gracefully on lower-end systems with limited CPU/GPU.[6]
-- Accessibility: high-contrast toggle clarity, keyboard-only navigation through menus, and legible HUD at small viewport widths.
-
-### Development notes
-
-- Tech stack: vanilla JS + HTML5 Canvas with an animation loop using requestAnimationFrame and no bundler or framework, easing maintenance and fast iteration.[5][6]
-- Modularity: separate files for runner and puzzles with minimal shared state, enabling incremental sprints and easy CI deployment from a branch.[2]
-- Determinism: add a seeded RNG for weekly routes later, enabling reproducible community challenges without servers as a follow-on task.
-
-### Contributing
-
-- Keep assets small and vector-friendly, prefer tiny OGG clips for SFX in later sprints, and commit with clear messages mapped to sprint tasks for traceability in Pages deployments.[2]
-- Validate on a low-end VM or Lubuntu machine early to catch performance regressions before publishing updates to Pages.
-
-### License
-
-- MIT recommended for rapid prototype sharing; place the license file at the repository root and reference it in this README for clarity.[11][2]
 
 ### Troubleshooting
 
-- If persistence fails locally, avoid file:// origins and run a lightweight server so localStorage and relative paths behave consistently in all browsers.[8][3]
-- If Pages shows 404, verify that Pages source is set to the intended branch and folder in Settings → Pages and wait a short time for the deploy to complete.[12][1]
+**Game not loading?**
+- Check browser console (F12) for JavaScript errors
+- Ensure all files are in repository root (not in subfolders)
+- Wait 5-10 minutes after pushing changes
+- Try hard refresh (Ctrl+F5)
+
+**404 on JavaScript files?**
+- Verify `.nojekyll` file exists in repository root
+- Check that file names match exactly (case-sensitive)
+- Ensure repository is public or Pages is enabled for private repos
+
+## 🎨 Game Features
+
+### Upgrades Available
+1. **Double Jump** (50 shards) - Execute mid-air jump for advanced navigation
+2. **Coyote Protocol** (75 shards) - Brief grace period for late jumps
+3. **Slide Optimization** (80 shards) - Faster slide recovery time
+4. **Encryption Tier I** (120 shards) - Survive minor hazards with data degradation
+
+### Lock Puzzles
+1. **Basic Encryption** → Unlocks Double Jump
+2. **Advanced Cipher** → Unlocks Coyote Protocol
+3. **Matrix Lock** → Unlocks Encryption Tier I
+
+Each puzzle uses 4×4 Sudoku rules: place numbers 1-4 so each row, column, and 2×2 region contains each number exactly once.
+
+## 💾 Technical Details
+
+### Performance Optimized
+- **Vanilla JavaScript** - No frameworks, fast loading
+- **Canvas Rendering** - Smooth 60fps on modest hardware
+- **LocalStorage** - Persistent progress without servers
+- **Mobile Friendly** - Responsive design with touch controls
+
+### Browser Support
+- Chrome 60+ ✅
+- Firefox 55+ ✅
+- Safari 12+ ✅
+- Edge 79+ ✅
+
+### Accessibility
+- High-contrast mode toggle
+- Keyboard-only navigation
+- Clear visual feedback
+- Mobile-responsive design
+
+## 🛠️ Development
+
+### Local Testing
+```bash
+# Clone repository
+git clone https://github.com/YOUR-USERNAME/cipher-courier.git
+cd cipher-courier
+
+# Serve locally (choose one)
+python3 -m http.server 8000          # Python
+npx http-server                       # Node.js
+php -S localhost:8000                 # PHP
+
+# Open http://localhost:8000
+```
+
+### File Structure
+- **index.html**: Complete game with embedded CSS
+- **game.js**: Main game loop, physics, collision detection, UI
+- **puzzle.js**: Sudoku engine with validation and rewards
+- **.nojekyll**: Prevents Jekyll processing on GitHub Pages
+
+### Adding Content
+
+**New Obstacles:**
+Edit `spawnObstacle()` in `game.js` to add obstacle types.
+
+**New Upgrades:**
+Add entries to the `upgrades` object in the game constructor.
+
+**New Puzzles:**
+Add puzzle data to `initializePuzzleData()` in `puzzle.js`.
+
+## 🎵 Story & Theme
+
+Navigate **Lattice-9**, a neon megacity where corporate entities throttle public bandwidth through "walled gardens." As a **Cipher Courier**, you deliver encrypted data packets that gradually restore free information flow across districts.
+
+### Districts
+- **East Grid**: Starting area with basic infrastructure
+- **Central Hub**: Commercial zone with advanced security
+- **West Sector**: High-security corporate stronghold
+
+Each successful run contributes to district liberation, unlocking new narrative elements and visual themes.
+
+## 🐛 Known Issues
+
+- Audio system not yet implemented
+- Limited visual assets (CSS-based graphics)
+- Puzzle UI optimized for desktop (mobile improvements planned)
+
+## 📝 License
+
+MIT License - Feel free to fork, modify, and share!
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Make your changes
+3. Test locally to ensure compatibility
+4. Submit a pull request with clear description
+
+This game was designed to run on low-end hardware and work offline, making it accessible to players with modest internet connections and older devices.
+
+---
+
+**Ready to liberate Lattice-9?** 🌆⚡
+
+Deploy to GitHub Pages and start your first courier mission!
+
+## 🔧 Quick Start Checklist
+
+- [ ] Repository created with all files
+- [ ] `.nojekyll` file present in root
+- [ ] GitHub Pages enabled in Settings
+- [ ] Source set to "main" branch, root folder
+- [ ] Live URL accessible: `https://YOUR-USERNAME.github.io/REPO-NAME`
+- [ ] Game loads and "START MISSION" button works
+- [ ] Console shows no JavaScript errors (F12 to check)
+
+🎮 **Game working?** You're ready to play! Share your high score! 🚀
