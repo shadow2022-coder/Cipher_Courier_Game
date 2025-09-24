@@ -1,32 +1,41 @@
-// Cipher Courier - Main Game Engine
-// Implements core runner mechanics, progression, and persistence
+// Cipher Courier - Complete Game Engine
+// Browser-first endless runner with cryptography theme
 
 class CipherCourier {
     constructor() {
+        // Canvas setup
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
-        this.gameWidth = this.canvas.width;
-        this.gameHeight = this.canvas.height;
+        this.width = this.canvas.width;
+        this.height = this.canvas.height;
         
         // Game state
-        this.state = 'menu'; // menu, playing, paused, gameover, safehouse
+        this.gameState = 'menu'; // menu, playing, paused, gameover, safehouse
         this.lastTime = 0;
-        this.gameSpeed = 200; // pixels per second
-        this.groundY = this.gameHeight - 60;
+        this.deltaTime = 0;
+        
+        // Game world
+        this.speed = 300; // pixels per second
+        this.baseSpeed = 300;
+        this.distance = 0;
+        this.groundY = this.height - 50;
         
         // Player
         this.player = {
-            x: 80,
-            y: this.groundY - 40,
-            width: 32,
-            height: 40,
+            x: 100,
+            y: this.groundY - 45,
+            width: 35,
+            height: 45,
             velocityY: 0,
+            jumpForce: -15,
+            gravity: 0.8,
             isGrounded: true,
             isSliding: false,
             slideTimer: 0,
-            jumpForce: -12,
-            gravity: 0.8,
-            color: '#00ff88'
+            slideHeight: 20,
+            normalHeight: 45,
+            coyoteTime: 0,
+            hasDoubleJump: false
         };
         
         // Game objects
@@ -35,281 +44,299 @@ class CipherCourier {
         this.relayNodes = [];
         this.particles = [];
         
-        // Progression
-        this.score = 0;
-        this.distance = 0;
-        this.runShards = 0;
-        this.currentDistrict = 0;
-        this.districtProgress = 0;
-        
-        // Spawning timers
+        // Timers
         this.obstacleTimer = 0;
         this.shardTimer = 0;
-        this.relayTimer = 0;
+        this.relayTimer = 8000; // First relay after 8 seconds
         
-        // Load persistent data
-        this.loadGameData();
+        // Game data
+        this.score = 0;
+        this.runShards = 0;
+        this.currentDistrict = 0;
         
-        // Initialize upgrades
-        this.initializeUpgrades();
+        // Persistent data (loaded from localStorage)
+        this.bankShards = parseInt(localStorage.getItem('cc-bank-shards') || '0');
+        this.highScore = parseInt(localStorage.getItem('cc-high-score') || '0');
+        this.unlockedUpgrades = JSON.parse(localStorage.getItem('cc-upgrades') || '[]');
+        this.districtProgress = JSON.parse(localStorage.getItem('cc-districts') || '[0,0,0]');
+        this.settings = JSON.parse(localStorage.getItem('cc-settings') || '{"highContrast":false}');
         
-        // Bind event listeners
-        this.bindEvents();
-        
-        // Update HUD
-        this.updateHUD();
-        
-        // Start render loop
-        this.gameLoop();
-    }
-    
-    // === PERSISTENT DATA ===
-    loadGameData() {
-        this.bankShards = parseInt(localStorage.getItem('cipher-courier-bank') || '0');
-        this.highScore = parseInt(localStorage.getItem('cipher-courier-highscore') || '0');
-        this.unlockedUpgrades = JSON.parse(localStorage.getItem('cipher-courier-upgrades') || '[]');
-        this.districtLiberation = JSON.parse(localStorage.getItem('cipher-courier-districts') || '[0,0,0]');
-        this.settings = JSON.parse(localStorage.getItem('cipher-courier-settings') || '{"highContrast":false}');
-    }
-    
-    saveGameData() {
-        localStorage.setItem('cipher-courier-bank', this.bankShards.toString());
-        localStorage.setItem('cipher-courier-highscore', this.highScore.toString());
-        localStorage.setItem('cipher-courier-upgrades', JSON.stringify(this.unlockedUpgrades));
-        localStorage.setItem('cipher-courier-districts', JSON.stringify(this.districtLiberation));
-        localStorage.setItem('cipher-courier-settings', JSON.stringify(this.settings));
-    }
-    
-    // === UPGRADES SYSTEM ===
-    initializeUpgrades() {
+        // Upgrades system
         this.upgrades = {
-            doubleJump: {
-                name: 'Double Jump',
-                cost: 50,
-                description: 'Grants one extra mid-air jump for better obstacle navigation',
+            doubleJump: { 
+                name: 'Double Jump', 
+                cost: 50, 
+                description: 'Execute a second jump while airborne for advanced navigation',
                 owned: this.unlockedUpgrades.includes('doubleJump')
             },
-            coyoteTime: {
-                name: 'Coyote Time',
-                cost: 75,
-                description: 'Allows late jump in a small grace window after leaving platform',
+            coyoteTime: { 
+                name: 'Coyote Protocol', 
+                cost: 75, 
+                description: 'Brief grace period allows jumping shortly after leaving platforms',
                 owned: this.unlockedUpgrades.includes('coyoteTime')
             },
-            slideCancel: {
-                name: 'Slide Cancel',
-                cost: 80,
-                description: 'Shortens slide recovery time for faster movement combos',
+            slideCancel: { 
+                name: 'Slide Optimization', 
+                cost: 80, 
+                description: 'Reduces slide recovery time for faster movement sequences',
                 owned: this.unlockedUpgrades.includes('slideCancel')
             },
-            encryptionTier1: {
-                name: 'Encryption Tier 1',
-                cost: 120,
-                description: 'Minor hazards cause degradation instead of instant termination',
+            encryptionTier1: { 
+                name: 'Encryption Tier I', 
+                cost: 120, 
+                description: 'Minor security hazards cause data degradation instead of termination',
                 owned: this.unlockedUpgrades.includes('encryptionTier1')
             }
         };
+        
+        // Initialize
+        this.initializeControls();
+        this.updateUI();
+        this.applySettings();
+        this.gameLoop();
+        
+        console.log('Cipher Courier initialized successfully');
     }
     
-    purchaseUpgrade(upgradeKey) {
-        const upgrade = this.upgrades[upgradeKey];
-        if (!upgrade.owned && this.bankShards >= upgrade.cost) {
-            this.bankShards -= upgrade.cost;
-            upgrade.owned = true;
-            this.unlockedUpgrades.push(upgradeKey);
-            this.saveGameData();
-            this.renderSafehouse();
-            this.updateHUD();
-            this.createParticles(400, 200, '#00ff88', 15); // Success effect
-        }
-    }
-    
-    // === EVENT HANDLING ===
-    bindEvents() {
-        document.addEventListener('keydown', (e) => this.handleKeyDown(e));
-        document.addEventListener('keyup', (e) => this.handleKeyUp(e));
-        this.canvas.addEventListener('click', () => this.handleClick());
+    // === CONTROL SYSTEM ===
+    initializeControls() {
+        // Keyboard events
+        document.addEventListener('keydown', (e) => {
+            if (e.repeat) return;
+            this.handleKeyDown(e);
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            this.handleKeyUp(e);
+        });
+        
+        // Mouse/touch events
+        this.canvas.addEventListener('click', () => {
+            this.handleJump();
+        });
+        
+        this.canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            this.handleJump();
+        });
     }
     
     handleKeyDown(e) {
-        if (e.repeat) return;
+        const key = e.code;
         
-        switch(e.code) {
+        switch(key) {
             case 'Space':
             case 'ArrowUp':
                 e.preventDefault();
-                if (this.state === 'playing') this.jump();
-                else if (this.state === 'menu' || this.state === 'gameover') this.start();
+                this.handleJump();
                 break;
+                
             case 'ArrowDown':
                 e.preventDefault();
-                if (this.state === 'playing') this.slide();
+                this.handleSlide();
                 break;
+                
             case 'KeyR':
-                if (this.state === 'gameover') this.restart();
+                if (this.gameState === 'gameover') {
+                    this.restartGame();
+                }
                 break;
+                
             case 'KeyS':
-                if (this.state === 'menu' || this.state === 'paused') this.showSafehouse();
+                if (this.gameState === 'menu') {
+                    this.showSafehouse();
+                }
                 break;
+                
             case 'Escape':
-                if (this.state === 'playing') this.pauseGame();
-                else if (this.state === 'safehouse') this.closeSafehouse();
+                if (this.gameState === 'playing') {
+                    this.pauseGame();
+                } else if (this.gameState === 'safehouse') {
+                    this.closeSafehouse();
+                }
                 break;
         }
     }
     
     handleKeyUp(e) {
-        // Handle key releases if needed
+        // Handle key releases if needed for future features
     }
     
-    handleClick() {
-        if (this.state === 'playing') this.jump();
-        else if (this.state === 'menu' || this.state === 'gameover') this.start();
+    handleJump() {
+        if (this.gameState === 'playing') {
+            this.jump();
+        } else if (this.gameState === 'menu') {
+            this.startGame();
+        } else if (this.gameState === 'gameover') {
+            this.restartGame();
+        }
+    }
+    
+    handleSlide() {
+        if (this.gameState === 'playing') {
+            this.slide();
+        }
     }
     
     // === PLAYER ACTIONS ===
     jump() {
-        if (this.player.isGrounded) {
+        if (this.player.isGrounded || this.player.coyoteTime > 0) {
+            // Regular jump
             this.player.velocityY = this.player.jumpForce;
             this.player.isGrounded = false;
-            this.createParticles(this.player.x + 16, this.player.y + 35, '#00ffff', 5);
-        } else if (this.upgrades.doubleJump.owned && this.player.velocityY > this.player.jumpForce * 0.5) {
-            // Double jump (only if we haven't used it yet this jump)
-            this.player.velocityY = this.player.jumpForce * 0.8;
-            this.createParticles(this.player.x + 16, this.player.y + 20, '#ff8800', 8);
+            this.player.coyoteTime = 0;
+            this.player.hasDoubleJump = this.upgrades.doubleJump.owned;
+            this.createJumpParticles();
+        } else if (this.player.hasDoubleJump && this.player.velocityY > this.player.jumpForce * 0.5) {
+            // Double jump
+            this.player.velocityY = this.player.jumpForce * 0.75;
+            this.player.hasDoubleJump = false;
+            this.createDoubleJumpParticles();
         }
     }
     
     slide() {
         if (this.player.isGrounded && !this.player.isSliding) {
             this.player.isSliding = true;
-            this.player.slideTimer = this.upgrades.slideCancel.owned ? 300 : 500; // ms
-            this.player.height = 20;
-            this.player.y = this.groundY - 20;
+            this.player.slideTimer = this.upgrades.slideCancel.owned ? 400 : 600; // ms
+            this.player.height = this.player.slideHeight;
+            this.player.y = this.groundY - this.player.slideHeight;
+            this.createSlideParticles();
         }
     }
     
     // === GAME STATE MANAGEMENT ===
-    start() {
-        this.resetRun();
-        this.state = 'playing';
-        document.getElementById('gameMenu').style.display = 'none';
+    startGame() {
+        this.resetGameState();
+        this.gameState = 'playing';
+        this.hideMenu();
+        console.log('Game started');
     }
     
-    restart() {
+    restartGame() {
         this.bankShards += this.runShards;
-        this.saveGameData();
-        this.start();
+        this.saveProgress();
+        this.startGame();
     }
     
     pauseGame() {
-        this.state = 'paused';
-        document.getElementById('gameMenu').style.display = 'flex';
-        document.querySelector('#gameMenu h1').textContent = 'PAUSED';
+        this.gameState = 'paused';
+        this.showMenu('PAUSED', 'Press ESC to continue');
     }
     
     gameOver() {
-        this.state = 'gameover';
+        this.gameState = 'gameover';
+        
+        // Update high score
         if (this.score > this.highScore) {
             this.highScore = this.score;
         }
+        
+        // Bank collected shards
         this.bankShards += this.runShards;
+        
+        // Update district progress
         this.updateDistrictProgress();
-        this.saveGameData();
-        document.getElementById('gameMenu').style.display = 'flex';
-        document.querySelector('#gameMenu h1').textContent = 'MISSION FAILED';
-        document.querySelector('#gameMenu p').textContent = `Score: ${this.score} • Shards Collected: ${this.runShards}`;
+        
+        // Save all progress
+        this.saveProgress();
+        
+        // Show game over screen
+        this.showMenu('MISSION FAILED', 
+                     `Score: ${this.score} • Shards: ${this.runShards}`,
+                     'Press R to restart or click START MISSION');
+                     
+        console.log(`Game over. Score: ${this.score}, Shards: ${this.runShards}`);
     }
     
-    resetRun() {
-        this.player.x = 80;
-        this.player.y = this.groundY - 40;
+    resetGameState() {
+        // Reset player
+        this.player.x = 100;
+        this.player.y = this.groundY - this.player.normalHeight;
+        this.player.height = this.player.normalHeight;
         this.player.velocityY = 0;
         this.player.isGrounded = true;
         this.player.isSliding = false;
-        this.player.height = 40;
+        this.player.slideTimer = 0;
+        this.player.coyoteTime = 0;
+        this.player.hasDoubleJump = false;
         
+        // Reset game world
+        this.speed = this.baseSpeed;
+        this.distance = 0;
+        this.score = 0;
+        this.runShards = 0;
+        
+        // Clear objects
         this.obstacles = [];
         this.shards = [];
         this.relayNodes = [];
         this.particles = [];
         
-        this.score = 0;
-        this.distance = 0;
-        this.runShards = 0;
-        this.gameSpeed = 200;
-        
+        // Reset timers
         this.obstacleTimer = 0;
         this.shardTimer = 0;
-        this.relayTimer = 5000; // First relay after 5 seconds
+        this.relayTimer = 8000;
         
-        this.updateHUD();
+        this.updateUI();
     }
     
-    showSafehouse() {
-        this.state = 'safehouse';
-        document.getElementById('gameMenu').style.display = 'none';
-        document.getElementById('safehouse').style.display = 'flex';
-        this.renderSafehouse();
-    }
-    
-    closeSafehouse() {
-        this.state = 'menu';
-        document.getElementById('safehouse').style.display = 'none';
-        document.getElementById('gameMenu').style.display = 'flex';
-        document.querySelector('#gameMenu h1').textContent = 'CIPHER COURIER';
-    }
-    
-    toggleHighContrast() {
-        this.settings.highContrast = !this.settings.highContrast;
-        document.body.classList.toggle('high-contrast', this.settings.highContrast);
-        this.saveGameData();
-    }
-    
-    // === GAME LOOP ===
+    // === MAIN GAME LOOP ===
     gameLoop(currentTime = 0) {
-        const deltaTime = currentTime - this.lastTime;
+        this.deltaTime = currentTime - this.lastTime;
         this.lastTime = currentTime;
         
-        if (this.state === 'playing') {
-            this.update(deltaTime);
+        // Update game logic
+        if (this.gameState === 'playing') {
+            this.update(this.deltaTime);
         }
         
+        // Render everything
         this.render();
+        
+        // Continue loop
         requestAnimationFrame((time) => this.gameLoop(time));
     }
     
     update(deltaTime) {
-        // Update player
-        this.updatePlayer(deltaTime);
+        const dt = deltaTime / 1000; // Convert to seconds
         
-        // Update timers and spawn objects
+        // Update player
+        this.updatePlayer(dt);
+        
+        // Update spawning
         this.updateSpawning(deltaTime);
         
-        // Update game objects
-        this.updateObjects(deltaTime);
+        // Update objects
+        this.updateObjects(dt);
         
         // Check collisions
         this.checkCollisions();
         
-        // Update progression
-        this.updateProgression(deltaTime);
+        // Update game progression
+        this.updateProgression(dt);
         
         // Update particles
-        this.updateParticles(deltaTime);
+        this.updateParticles(dt);
         
-        // Update HUD
-        this.updateHUD();
+        // Update UI
+        this.updateUI();
     }
     
-    updatePlayer(deltaTime) {
+    updatePlayer(dt) {
         // Handle sliding
         if (this.player.isSliding) {
-            this.player.slideTimer -= deltaTime;
+            this.player.slideTimer -= dt * 1000;
             if (this.player.slideTimer <= 0) {
                 this.player.isSliding = false;
-                this.player.height = 40;
-                this.player.y = this.groundY - 40;
+                this.player.height = this.player.normalHeight;
+                this.player.y = this.groundY - this.player.normalHeight;
             }
+        }
+        
+        // Handle coyote time
+        if (!this.player.isGrounded && this.player.coyoteTime > 0) {
+            this.player.coyoteTime -= dt;
         }
         
         // Apply gravity
@@ -324,7 +351,13 @@ class CipherCourier {
         if (this.player.y >= this.groundY - this.player.height) {
             this.player.y = this.groundY - this.player.height;
             this.player.velocityY = 0;
+            
+            if (!this.player.isGrounded && this.upgrades.coyoteTime.owned) {
+                this.player.coyoteTime = 0.15; // 150ms grace period
+            }
+            
             this.player.isGrounded = true;
+            this.player.hasDoubleJump = this.upgrades.doubleJump.owned;
         }
     }
     
@@ -336,29 +369,31 @@ class CipherCourier {
         // Spawn obstacles
         if (this.obstacleTimer <= 0) {
             this.spawnObstacle();
-            this.obstacleTimer = Math.random() * 2000 + 1500; // 1.5-3.5 seconds
+            // Decrease interval over time for difficulty
+            const interval = Math.max(1200, 2500 - this.distance * 2);
+            this.obstacleTimer = interval + (Math.random() - 0.5) * 500;
         }
         
-        // Spawn shards
+        // Spawn shard clusters
         if (this.shardTimer <= 0) {
             this.spawnShardCluster();
-            this.shardTimer = Math.random() * 3000 + 2000; // 2-5 seconds
+            this.shardTimer = 2000 + Math.random() * 3000; // 2-5 seconds
         }
         
         // Spawn relay nodes
         if (this.relayTimer <= 0) {
             this.spawnRelayNode();
-            this.relayTimer = Math.random() * 8000 + 12000; // 12-20 seconds
+            this.relayTimer = 15000 + Math.random() * 10000; // 15-25 seconds
         }
     }
     
-    updateObjects(deltaTime) {
-        const speed = this.gameSpeed * (deltaTime / 1000);
+    updateObjects(dt) {
+        const moveDistance = this.speed * dt;
         
         // Update obstacles
         for (let i = this.obstacles.length - 1; i >= 0; i--) {
             const obstacle = this.obstacles[i];
-            obstacle.x -= speed;
+            obstacle.x -= moveDistance;
             
             if (obstacle.x + obstacle.width < 0) {
                 this.obstacles.splice(i, 1);
@@ -368,8 +403,8 @@ class CipherCourier {
         // Update shards
         for (let i = this.shards.length - 1; i >= 0; i--) {
             const shard = this.shards[i];
-            shard.x -= speed;
-            shard.rotation += 0.1;
+            shard.x -= moveDistance;
+            shard.rotation += dt * 3; // Rotate shards
             
             if (shard.x + shard.size < 0) {
                 this.shards.splice(i, 1);
@@ -379,30 +414,31 @@ class CipherCourier {
         // Update relay nodes
         for (let i = this.relayNodes.length - 1; i >= 0; i--) {
             const relay = this.relayNodes[i];
-            relay.x -= speed;
-            relay.pulse += 0.1;
+            relay.x -= moveDistance;
+            relay.pulse += dt * 4; // Pulsing animation
             
             if (relay.x + relay.width < 0) {
                 this.relayNodes.splice(i, 1);
             }
         }
         
-        // Increase game speed gradually
-        this.gameSpeed += deltaTime * 0.01;
+        // Gradually increase speed
+        this.speed += dt * 8; // Speed increase over time
     }
     
-    updateProgression(deltaTime) {
-        this.distance += this.gameSpeed * (deltaTime / 1000);
-        this.score = Math.floor(this.distance / 10) + (this.runShards * 25);
+    updateProgression(dt) {
+        this.distance += this.speed * dt * 0.01; // Convert to "meters"
+        this.score = Math.floor(this.distance * 10) + (this.runShards * 20);
     }
     
-    updateParticles(deltaTime) {
+    updateParticles(dt) {
         for (let i = this.particles.length - 1; i >= 0; i--) {
             const particle = this.particles[i];
-            particle.x += particle.vx;
-            particle.y += particle.vy;
-            particle.vy += 0.2; // gravity
-            particle.life -= deltaTime;
+            
+            particle.x += particle.vx * dt;
+            particle.y += particle.vy * dt;
+            particle.vy += 400 * dt; // Gravity
+            particle.life -= dt;
             particle.alpha = particle.life / particle.maxLife;
             
             if (particle.life <= 0) {
@@ -411,10 +447,9 @@ class CipherCourier {
         }
     }
     
-    // === COLLISION DETECTION ===
+    // === COLLISION SYSTEM ===
     checkCollisions() {
-        // Player bounds
-        const playerBounds = {
+        const playerRect = {
             x: this.player.x,
             y: this.player.y,
             width: this.player.width,
@@ -422,14 +457,19 @@ class CipherCourier {
         };
         
         // Check obstacle collisions
-        for (const obstacle of this.obstacles) {
-            if (this.checkRectCollision(playerBounds, obstacle)) {
+        for (let i = this.obstacles.length - 1; i >= 0; i--) {
+            const obstacle = this.obstacles[i];
+            
+            if (this.checkRectCollision(playerRect, obstacle)) {
                 if (obstacle.type === 'minor' && this.upgrades.encryptionTier1.owned) {
-                    // Degradation instead of death
-                    this.runShards = Math.floor(this.runShards * 0.8);
-                    obstacle.x = -100; // Remove obstacle
-                    this.createParticles(obstacle.x, obstacle.y, '#ff4444', 10);
+                    // Degradation instead of termination
+                    this.runShards = Math.floor(this.runShards * 0.7);
+                    this.obstacles.splice(i, 1);
+                    this.createHitParticles(obstacle.x, obstacle.y, '#ff4444');
+                    console.log('Minor hazard caused data degradation');
                 } else {
+                    // Game over
+                    this.createHitParticles(this.player.x, this.player.y, '#ff4444');
                     this.gameOver();
                     return;
                 }
@@ -439,21 +479,33 @@ class CipherCourier {
         // Check shard collisions
         for (let i = this.shards.length - 1; i >= 0; i--) {
             const shard = this.shards[i];
-            if (this.checkCircleRectCollision(shard, playerBounds)) {
+            const shardRect = {
+                x: shard.x - shard.size,
+                y: shard.y - shard.size,
+                width: shard.size * 2,
+                height: shard.size * 2
+            };
+            
+            if (this.checkRectCollision(playerRect, shardRect)) {
                 this.runShards++;
-                this.createParticles(shard.x, shard.y, shard.color, 8);
+                this.score += 20; // Bonus points for collection
+                this.createCollectParticles(shard.x, shard.y, '#ff8800');
                 this.shards.splice(i, 1);
             }
         }
         
-        // Check relay collisions
+        // Check relay node collisions
         for (let i = this.relayNodes.length - 1; i >= 0; i--) {
             const relay = this.relayNodes[i];
-            if (this.checkRectCollision(playerBounds, relay)) {
+            
+            if (this.checkRectCollision(playerRect, relay)) {
+                // Bank shards at relay
                 this.bankShards += this.runShards;
-                this.createParticles(relay.x + 25, relay.y + 25, '#00ffff', 12);
+                this.createRelayParticles(relay.x + relay.width/2, relay.y + relay.height/2);
                 this.relayNodes.splice(i, 1);
-                this.saveGameData();
+                this.saveProgress();
+                console.log(`Banked ${this.runShards} shards at relay. Total: ${this.bankShards}`);
+                this.runShards = 0; // Reset run shards after banking
             }
         }
     }
@@ -465,122 +517,136 @@ class CipherCourier {
                rect1.y + rect1.height > rect2.y;
     }
     
-    checkCircleRectCollision(circle, rect) {
-        const distX = Math.abs(circle.x - rect.x - rect.width / 2);
-        const distY = Math.abs(circle.y - rect.y - rect.height / 2);
-        
-        if (distX > (rect.width / 2 + circle.size)) return false;
-        if (distY > (rect.height / 2 + circle.size)) return false;
-        
-        if (distX <= rect.width / 2) return true;
-        if (distY <= rect.height / 2) return true;
-        
-        const dx = distX - rect.width / 2;
-        const dy = distY - rect.height / 2;
-        return (dx * dx + dy * dy <= circle.size * circle.size);
-    }
-    
-    // === SPAWNING ===
+    // === SPAWNING SYSTEM ===
     spawnObstacle() {
-        const types = ['firewall', 'drone', 'barrier'];
-        const type = types[Math.floor(Math.random() * types.length)];
+        const types = [
+            { name: 'firewall', width: 25, height: 70, type: 'major', color: '#ff4444' },
+            { name: 'drone', width: 30, height: 18, type: 'minor', color: '#ff8800' },
+            { name: 'barrier', width: 35, height: 45, type: 'major', color: '#ff4444' }
+        ];
         
-        let obstacle = {
-            x: this.gameWidth,
-            type: type,
-            color: type === 'drone' ? '#ff8800' : '#ff4444'
-        };
+        const template = types[Math.floor(Math.random() * types.length)];
+        const obstacle = { ...template };
         
-        switch(type) {
-            case 'firewall':
-                obstacle.y = this.groundY - 60;
-                obstacle.width = 20;
-                obstacle.height = 60;
-                obstacle.type = 'major';
-                break;
-            case 'drone':
-                obstacle.y = this.groundY - 120 - Math.random() * 60;
-                obstacle.width = 25;
-                obstacle.height = 15;
-                obstacle.type = 'minor';
-                break;
-            case 'barrier':
-                obstacle.y = this.groundY - 40;
-                obstacle.width = 30;
-                obstacle.height = 40;
-                obstacle.type = 'major';
-                break;
+        obstacle.x = this.width + 20;
+        
+        if (template.name === 'drone') {
+            // Drones fly at various heights
+            obstacle.y = this.groundY - 80 - Math.random() * 60;
+        } else {
+            // Ground obstacles
+            obstacle.y = this.groundY - obstacle.height;
         }
         
         this.obstacles.push(obstacle);
     }
     
     spawnShardCluster() {
-        const clusterSize = Math.floor(Math.random() * 4) + 3; // 3-6 shards
-        const startX = this.gameWidth + 50;
+        const clusterSize = 3 + Math.floor(Math.random() * 4); // 3-6 shards
+        const startX = this.width + 50;
         const pattern = Math.random() > 0.5 ? 'arc' : 'line';
         
         for (let i = 0; i < clusterSize; i++) {
-            let x = startX + i * 35;
-            let y;
+            const shard = {
+                x: startX + i * 40,
+                y: 0,
+                size: 12,
+                color: '#ff8800',
+                rotation: Math.random() * Math.PI * 2
+            };
             
             if (pattern === 'arc') {
-                const mid = clusterSize / 2;
-                const height = 80 + Math.random() * 40;
-                y = this.groundY - 80 - height * Math.sin((i / (clusterSize - 1)) * Math.PI);
+                // Arc pattern
+                const progress = i / (clusterSize - 1);
+                const height = 100 * Math.sin(progress * Math.PI);
+                shard.y = this.groundY - 60 - height;
             } else {
-                y = this.groundY - 80 - Math.random() * 60;
+                // Line pattern
+                shard.y = this.groundY - 60 - Math.random() * 80;
             }
             
-            this.shards.push({
-                x: x,
-                y: y,
-                size: 8,
-                color: '#ff8800',
-                rotation: 0
-            });
+            this.shards.push(shard);
         }
     }
     
     spawnRelayNode() {
-        this.relayNodes.push({
-            x: this.gameWidth,
-            y: this.groundY - 50,
+        const relay = {
+            x: this.width + 20,
+            y: this.groundY - 60,
             width: 50,
-            height: 50,
+            height: 60,
             color: '#00ffff',
             pulse: 0
-        });
+        };
+        
+        this.relayNodes.push(relay);
     }
     
-    // === PARTICLES ===
+    // === PARTICLE EFFECTS ===
+    createJumpParticles() {
+        this.createParticles(
+            this.player.x + this.player.width/2, 
+            this.player.y + this.player.height, 
+            '#00ffff', 
+            8
+        );
+    }
+    
+    createDoubleJumpParticles() {
+        this.createParticles(
+            this.player.x + this.player.width/2, 
+            this.player.y + this.player.height/2, 
+            '#00ff88', 
+            12
+        );
+    }
+    
+    createSlideParticles() {
+        this.createParticles(
+            this.player.x + this.player.width, 
+            this.player.y + this.player.height, 
+            '#ffffff', 
+            6
+        );
+    }
+    
+    createCollectParticles(x, y, color) {
+        this.createParticles(x, y, color, 10);
+    }
+    
+    createHitParticles(x, y, color) {
+        this.createParticles(x, y, color, 15);
+    }
+    
+    createRelayParticles(x, y) {
+        this.createParticles(x, y, '#00ffff', 20);
+    }
+    
     createParticles(x, y, color, count) {
         for (let i = 0; i < count; i++) {
             this.particles.push({
                 x: x,
                 y: y,
-                vx: (Math.random() - 0.5) * 8,
-                vy: (Math.random() - 0.5) * 8 - 2,
+                vx: (Math.random() - 0.5) * 200,
+                vy: (Math.random() - 0.5) * 200 - 50,
                 color: color,
-                life: 1000,
-                maxLife: 1000,
+                life: 0.5 + Math.random() * 0.5,
+                maxLife: 0.5 + Math.random() * 0.5,
                 alpha: 1,
-                size: Math.random() * 3 + 2
+                size: 2 + Math.random() * 3
             });
         }
     }
     
-    // === RENDERING ===
+    // === RENDERING SYSTEM ===
     render() {
-        // Clear canvas
+        // Clear canvas with fade effect
         this.ctx.fillStyle = 'rgba(0, 17, 34, 0.1)';
-        this.ctx.fillRect(0, 0, this.gameWidth, this.gameHeight);
+        this.ctx.fillRect(0, 0, this.width, this.height);
         
-        if (this.state === 'playing') {
+        if (this.gameState === 'playing') {
             this.renderBackground();
-            this.renderObstacles();
-            this.renderShards();
-            this.renderRelayNodes();
+            this.renderObjects();
             this.renderPlayer();
             this.renderParticles();
         }
@@ -589,58 +655,75 @@ class CipherCourier {
     renderBackground() {
         // Draw ground
         this.ctx.fillStyle = '#1a1a2e';
-        this.ctx.fillRect(0, this.groundY, this.gameWidth, this.gameHeight - this.groundY);
+        this.ctx.fillRect(0, this.groundY, this.width, this.height - this.groundY);
         
-        // Draw grid lines (moving)
-        this.ctx.strokeStyle = '#16213e';
+        // Draw moving grid lines
+        this.ctx.strokeStyle = 'rgba(0, 255, 255, 0.3)';
         this.ctx.lineWidth = 1;
-        const gridOffset = (this.distance * 0.5) % 40;
         
-        for (let x = -gridOffset; x < this.gameWidth; x += 40) {
+        const offset = (this.distance * 20) % 50;
+        for (let x = -offset; x < this.width + 50; x += 50) {
             this.ctx.beginPath();
             this.ctx.moveTo(x, 0);
-            this.ctx.lineTo(x, this.gameHeight);
+            this.ctx.lineTo(x, this.height);
             this.ctx.stroke();
         }
         
-        for (let y = 0; y < this.gameHeight; y += 40) {
+        for (let y = 0; y < this.height; y += 50) {
             this.ctx.beginPath();
             this.ctx.moveTo(0, y);
-            this.ctx.lineTo(this.gameWidth, y);
+            this.ctx.lineTo(this.width, y);
             this.ctx.stroke();
         }
+        
+        // Ground line
+        this.ctx.strokeStyle = '#00ffff';
+        this.ctx.lineWidth = 2;
+        this.ctx.beginPath();
+        this.ctx.moveTo(0, this.groundY);
+        this.ctx.lineTo(this.width, this.groundY);
+        this.ctx.stroke();
     }
     
     renderPlayer() {
-        this.ctx.fillStyle = this.player.color;
-        this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height);
+        const { x, y, width, height } = this.player;
+        
+        // Player body
+        this.ctx.fillStyle = '#00ff88';
+        this.ctx.fillRect(x, y, width, height);
         
         // Add glow effect
-        this.ctx.shadowColor = this.player.color;
+        this.ctx.shadowColor = '#00ff88';
         this.ctx.shadowBlur = 10;
-        this.ctx.fillRect(this.player.x, this.player.y, this.player.width, this.player.height);
+        this.ctx.fillRect(x, y, width, height);
         this.ctx.shadowBlur = 0;
         
-        // Player details
+        // Player details (simple face)
         this.ctx.fillStyle = '#ffffff';
-        this.ctx.fillRect(this.player.x + 8, this.player.y + 8, 4, 4); // Eyes
-        this.ctx.fillRect(this.player.x + 20, this.player.y + 8, 4, 4);
+        this.ctx.fillRect(x + 8, y + 10, 5, 5); // Left eye
+        this.ctx.fillRect(x + 22, y + 10, 5, 5); // Right eye
+        
+        // Slide indicator
+        if (this.player.isSliding) {
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            this.ctx.fillRect(x + width, y + height - 5, 15, 3);
+        }
     }
     
-    renderObstacles() {
+    renderObjects() {
+        // Render obstacles
         for (const obstacle of this.obstacles) {
             this.ctx.fillStyle = obstacle.color;
             this.ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
             
-            // Add glow
+            // Add glow effect
             this.ctx.shadowColor = obstacle.color;
             this.ctx.shadowBlur = 8;
             this.ctx.fillRect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
             this.ctx.shadowBlur = 0;
         }
-    }
-    
-    renderShards() {
+        
+        // Render shards
         for (const shard of this.shards) {
             this.ctx.save();
             this.ctx.translate(shard.x, shard.y);
@@ -649,6 +732,7 @@ class CipherCourier {
             this.ctx.fillStyle = shard.color;
             this.ctx.fillRect(-shard.size, -shard.size, shard.size * 2, shard.size * 2);
             
+            // Glow effect
             this.ctx.shadowColor = shard.color;
             this.ctx.shadowBlur = 6;
             this.ctx.fillRect(-shard.size, -shard.size, shard.size * 2, shard.size * 2);
@@ -656,19 +740,19 @@ class CipherCourier {
             
             this.ctx.restore();
         }
-    }
-    
-    renderRelayNodes() {
+        
+        // Render relay nodes
         for (const relay of this.relayNodes) {
-            const pulseScale = 1 + Math.sin(relay.pulse) * 0.1;
+            const scale = 1 + Math.sin(relay.pulse) * 0.1;
             
             this.ctx.save();
             this.ctx.translate(relay.x + relay.width/2, relay.y + relay.height/2);
-            this.ctx.scale(pulseScale, pulseScale);
+            this.ctx.scale(scale, scale);
             
             this.ctx.fillStyle = relay.color;
             this.ctx.fillRect(-relay.width/2, -relay.height/2, relay.width, relay.height);
             
+            // Glow effect
             this.ctx.shadowColor = relay.color;
             this.ctx.shadowBlur = 15;
             this.ctx.fillRect(-relay.width/2, -relay.height/2, relay.width, relay.height);
@@ -682,14 +766,18 @@ class CipherCourier {
         for (const particle of this.particles) {
             this.ctx.globalAlpha = particle.alpha;
             this.ctx.fillStyle = particle.color;
-            this.ctx.fillRect(particle.x - particle.size/2, particle.y - particle.size/2, 
-                            particle.size, particle.size);
+            this.ctx.fillRect(
+                particle.x - particle.size/2, 
+                particle.y - particle.size/2, 
+                particle.size, 
+                particle.size
+            );
         }
         this.ctx.globalAlpha = 1;
     }
     
-    // === UI ===
-    updateHUD() {
+    // === UI MANAGEMENT ===
+    updateUI() {
         document.getElementById('score').textContent = Math.floor(this.score);
         document.getElementById('shards').textContent = this.runShards;
         document.getElementById('bankShards').textContent = this.bankShards;
@@ -697,57 +785,175 @@ class CipherCourier {
         const districts = ['East Grid', 'Central Hub', 'West Sector'];
         document.getElementById('district').textContent = districts[this.currentDistrict] || 'Unknown';
         
-        const liberation = Math.floor(this.districtLiberation[this.currentDistrict] || 0);
+        const liberation = Math.floor(this.districtProgress[this.currentDistrict] || 0);
         document.getElementById('liberation').textContent = `${liberation}%`;
     }
     
-    renderSafehouse() {
+    showMenu(title, subtitle, info = '') {
+        const menu = document.getElementById('gameMenu');
+        menu.style.display = 'flex';
+        
+        menu.querySelector('h1').textContent = title;
+        const paragraphs = menu.querySelectorAll('p');
+        if (paragraphs[0]) paragraphs[0].textContent = subtitle;
+        if (paragraphs[1]) paragraphs[1].textContent = info;
+    }
+    
+    hideMenu() {
+        document.getElementById('gameMenu').style.display = 'none';
+    }
+    
+    // === PERSISTENCE SYSTEM ===
+    saveProgress() {
+        try {
+            localStorage.setItem('cc-bank-shards', this.bankShards.toString());
+            localStorage.setItem('cc-high-score', this.highScore.toString());
+            localStorage.setItem('cc-upgrades', JSON.stringify(this.unlockedUpgrades));
+            localStorage.setItem('cc-districts', JSON.stringify(this.districtProgress));
+            localStorage.setItem('cc-settings', JSON.stringify(this.settings));
+        } catch (error) {
+            console.warn('Could not save progress:', error);
+        }
+    }
+    
+    updateDistrictProgress() {
+        const progressGain = Math.floor(this.score / 1000);
+        const currentProgress = this.districtProgress[this.currentDistrict] || 0;
+        this.districtProgress[this.currentDistrict] = Math.min(100, currentProgress + progressGain);
+        
+        // Advance to next district if current is complete
+        if (this.districtProgress[this.currentDistrict] >= 100 && this.currentDistrict < 2) {
+            this.currentDistrict++;
+            console.log(`Advanced to district ${this.currentDistrict + 1}`);
+        }
+    }
+    
+    // === UPGRADE SYSTEM ===
+    purchaseUpgrade(upgradeKey) {
+        const upgrade = this.upgrades[upgradeKey];
+        if (!upgrade || upgrade.owned) return false;
+        
+        if (this.bankShards >= upgrade.cost) {
+            this.bankShards -= upgrade.cost;
+            upgrade.owned = true;
+            this.unlockedUpgrades.push(upgradeKey);
+            this.saveProgress();
+            this.renderUpgradeGrid();
+            this.updateUI();
+            console.log(`Purchased upgrade: ${upgrade.name}`);
+            return true;
+        }
+        
+        console.log(`Insufficient shards for ${upgrade.name}. Need: ${upgrade.cost}, Have: ${this.bankShards}`);
+        return false;
+    }
+    
+    renderUpgradeGrid() {
         const grid = document.getElementById('upgradeGrid');
+        if (!grid) return;
+        
         grid.innerHTML = '';
         
         for (const [key, upgrade] of Object.entries(this.upgrades)) {
             const card = document.createElement('div');
             card.className = 'upgrade-card' + (upgrade.owned ? ' owned' : '');
             
+            const canAfford = this.bankShards >= upgrade.cost;
+            const buttonDisabled = upgrade.owned || !canAfford;
+            
             card.innerHTML = `
                 <h3>${upgrade.name}</h3>
                 <p>${upgrade.description}</p>
                 <p><strong>Cost: ${upgrade.cost} shards</strong></p>
-                ${upgrade.owned ? '<p style="color: var(--accent-cyan)">OWNED</p>' : 
-                  `<button class="menu-button" onclick="Game.purchaseUpgrade('${key}')" 
-                   ${this.bankShards < upgrade.cost ? 'disabled' : ''}>
-                   PURCHASE</button>`}
+                ${upgrade.owned ? 
+                    '<p style="color: var(--accent-cyan); font-weight: bold;">OWNED</p>' : 
+                    `<button class="menu-button" onclick="game.purchaseUpgrade('${key}')" 
+                     ${buttonDisabled ? 'disabled' : ''}>
+                     ${canAfford ? 'PURCHASE' : 'INSUFFICIENT SHARDS'}
+                     </button>`}
             `;
             
             grid.appendChild(card);
         }
     }
     
-    updateDistrictProgress() {
-        const progress = Math.min(100, this.districtLiberation[this.currentDistrict] + 
-                                     Math.floor(this.score / 1000));
-        this.districtLiberation[this.currentDistrict] = progress;
+    // === SETTINGS ===
+    applySettings() {
+        if (this.settings.highContrast) {
+            document.body.classList.add('high-contrast');
+        }
+    }
+    
+    toggleHighContrast() {
+        this.settings.highContrast = !this.settings.highContrast;
+        document.body.classList.toggle('high-contrast', this.settings.highContrast);
+        this.saveProgress();
+        console.log('High contrast toggled:', this.settings.highContrast);
+    }
+    
+    // === SAFEHOUSE INTERFACE ===
+    showSafehouse() {
+        this.gameState = 'safehouse';
+        document.getElementById('gameMenu').style.display = 'none';
+        document.getElementById('safehouse').style.display = 'block';
+        this.renderUpgradeGrid();
+    }
+    
+    closeSafehouse() {
+        this.gameState = 'menu';
+        document.getElementById('safehouse').style.display = 'none';
+        document.getElementById('gameMenu').style.display = 'flex';
+    }
+    
+    showTab(tabName) {
+        // Hide all tabs
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.classList.remove('active');
+        });
         
-        if (progress >= 100 && this.currentDistrict < 2) {
-            this.currentDistrict++;
+        // Show selected tab
+        document.getElementById(`${tabName}Tab`).classList.add('active');
+        document.querySelector(`[onclick="showTab('${tabName}')"]`).classList.add('active');
+        
+        if (tabName === 'upgrades') {
+            this.renderUpgradeGrid();
         }
     }
 }
 
 // Initialize game when page loads
-let Game;
+let game;
+
 window.addEventListener('load', () => {
-    Game = new CipherCourier();
-    
-    // Expose methods for HTML onclick handlers
-    Game.start = Game.start.bind(Game);
-    Game.showSafehouse = Game.showSafehouse.bind(Game);
-    Game.closeSafehouse = Game.closeSafehouse.bind(Game);
-    Game.toggleHighContrast = Game.toggleHighContrast.bind(Game);
-    Game.purchaseUpgrade = Game.purchaseUpgrade.bind(Game);
+    game = new CipherCourier();
+    console.log('Cipher Courier loaded successfully');
 });
 
-// Export for module systems
+// Global functions for HTML onclick handlers
+function startGame() {
+    if (game) game.startGame();
+}
+
+function showSafehouse() {
+    if (game) game.showSafehouse();
+}
+
+function closeSafehouse() {
+    if (game) game.closeSafehouse();
+}
+
+function toggleHighContrast() {
+    if (game) game.toggleHighContrast();
+}
+
+function showTab(tabName) {
+    if (game) game.showTab(tabName);
+}
+
+// Export for modules if needed
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = CipherCourier;
 }
