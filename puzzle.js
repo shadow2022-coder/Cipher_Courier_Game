@@ -1,22 +1,25 @@
-// Cipher Courier - Lock Puzzle System
-// Sudoku-inspired 4x4 and 6x6 grid puzzles for upgrade unlocks
+// Cipher Courier - Puzzle System
+// Sudoku-inspired lock puzzles for upgrade unlocks
 
 class PuzzleSystem {
     constructor() {
         this.currentPuzzle = null;
         this.selectedCell = null;
         this.onSolveCallback = null;
-        this.puzzleData = this.loadPuzzleData();
+        this.puzzleData = this.initializePuzzleData();
+        
+        console.log('Puzzle system initialized');
     }
     
-    loadPuzzleData() {
-        // Default puzzle levels - can be loaded from JSON
+    initializePuzzleData() {
         return {
             "4x4": [
                 {
                     "id": "basic_1",
                     "name": "Basic Encryption",
                     "difficulty": "easy",
+                    "description": "Entry-level cipher lock for basic network access",
+                    "reward": "doubleJump",
                     "grid": [
                         [1, 0, 0, 4],
                         [0, 0, 3, 0],
@@ -28,13 +31,14 @@ class PuzzleSystem {
                         [4, 3, 2, 1],
                         [2, 4, 1, 3],
                         [3, 1, 4, 2]
-                    ],
-                    "reward": "doubleJump"
+                    ]
                 },
                 {
                     "id": "cipher_2",
                     "name": "Advanced Cipher",
                     "difficulty": "medium",
+                    "description": "Intermediate security protocol with enhanced validation",
+                    "reward": "coyoteTime",
                     "grid": [
                         [0, 2, 0, 0],
                         [0, 0, 0, 3],
@@ -46,13 +50,14 @@ class PuzzleSystem {
                         [2, 4, 1, 3],
                         [4, 3, 2, 1],
                         [3, 1, 4, 2]
-                    ],
-                    "reward": "coyoteTime"
+                    ]
                 },
                 {
                     "id": "matrix_3",
                     "name": "Matrix Lock",
                     "difficulty": "hard",
+                    "description": "High-security matrix requiring expert-level decryption",
+                    "reward": "encryptionTier1",
                     "grid": [
                         [0, 0, 3, 0],
                         [0, 1, 0, 4],
@@ -64,15 +69,14 @@ class PuzzleSystem {
                         [3, 1, 2, 4],
                         [2, 4, 1, 3],
                         [1, 3, 4, 2]
-                    ],
-                    "reward": "encryptionTier1"
+                    ]
                 }
             ]
         };
     }
     
     // Create a new puzzle instance
-    create(size = 4, levelId = null) {
+    createPuzzle(size = 4, levelId = null) {
         const puzzleLevel = levelId ? 
             this.puzzleData[`${size}x${size}`].find(p => p.id === levelId) :
             this.puzzleData[`${size}x${size}`][0];
@@ -91,6 +95,9 @@ class PuzzleSystem {
             errors: []
         };
         
+        this.selectedCell = null;
+        
+        console.log(`Created puzzle: ${puzzleLevel.name}`);
         return this.currentPuzzle;
     }
     
@@ -118,7 +125,9 @@ class PuzzleSystem {
     
     // Validate current puzzle state
     validate() {
-        if (!this.currentPuzzle) return { valid: false, errors: ["No puzzle loaded"] };
+        if (!this.currentPuzzle) {
+            return { valid: false, complete: false, errors: ["No puzzle loaded"] };
+        }
         
         const size = this.currentPuzzle.size;
         const grid = this.currentPuzzle.grid;
@@ -193,6 +202,7 @@ class PuzzleSystem {
         this.currentPuzzle.errors = errors;
         
         if (valid && this.onSolveCallback) {
+            console.log(`Puzzle solved! Reward: ${this.currentPuzzle.level.reward}`);
             this.onSolveCallback(this.currentPuzzle.level.reward);
         }
         
@@ -204,7 +214,7 @@ class PuzzleSystem {
         this.onSolveCallback = callback;
     }
     
-    // Get hint for next move (optional helper)
+    // Get hint for next move
     getHint() {
         if (!this.currentPuzzle) return null;
         
@@ -220,7 +230,7 @@ class PuzzleSystem {
                         row: r,
                         col: c,
                         value: solution[r][c],
-                        reason: "Next logical step"
+                        reason: "Next logical step based on constraints"
                     };
                 }
             }
@@ -236,6 +246,9 @@ class PuzzleSystem {
         this.currentPuzzle.grid = this.currentPuzzle.originalGrid.map(row => [...row]);
         this.currentPuzzle.isComplete = false;
         this.currentPuzzle.errors = [];
+        this.selectedCell = null;
+        
+        console.log('Puzzle reset');
     }
     
     // Get available puzzles
@@ -243,228 +256,266 @@ class PuzzleSystem {
         return this.puzzleData[`${size}x${size}`] || [];
     }
     
-    // Auto-solve (for testing)
+    // Auto-solve for testing/demonstration
     solve() {
         if (!this.currentPuzzle) return false;
         
         this.currentPuzzle.grid = this.currentPuzzle.level.solution.map(row => [...row]);
-        return this.validate().valid;
+        const result = this.validate();
+        
+        console.log('Puzzle auto-solved');
+        return result.valid;
     }
 }
 
-// UI Controller for puzzle interface
-class PuzzleUI {
-    constructor(containerId, puzzleSystem) {
-        this.container = document.getElementById(containerId);
-        this.puzzleSystem = puzzleSystem;
-        this.selectedCell = null;
+// Global puzzle system instance
+let puzzleSystem;
+
+// Puzzle UI management functions
+function initializePuzzleSystem() {
+    if (!puzzleSystem) {
+        puzzleSystem = new PuzzleSystem();
         
-        if (!this.container) {
-            console.error(`Puzzle container not found: ${containerId}`);
-            return;
+        // Connect to main game
+        if (typeof game !== 'undefined' && game) {
+            puzzleSystem.onSolved((rewardId) => {
+                if (!game.unlockedUpgrades.includes(rewardId)) {
+                    game.unlockedUpgrades.push(rewardId);
+                    
+                    // Update the specific upgrade
+                    if (game.upgrades[rewardId]) {
+                        game.upgrades[rewardId].owned = true;
+                    }
+                    
+                    game.saveProgress();
+                    updatePuzzleStatus(`🎉 Puzzle solved! ${rewardId} upgrade unlocked!`, 'var(--accent-green)');
+                    
+                    // Visual feedback
+                    if (game.createParticles) {
+                        game.createParticles(400, 200, '#00ff88', 20);
+                    }
+                    
+                    console.log(`Unlocked upgrade: ${rewardId}`);
+                } else {
+                    updatePuzzleStatus(`Puzzle solved, but ${rewardId} was already unlocked`, 'var(--accent-cyan)');
+                }
+            });
         }
-        
-        this.setupUI();
     }
     
-    setupUI() {
-        this.container.innerHTML = `
-            <div id="puzzleHeader" style="text-align: center; margin-bottom: 20px;">
-                <h3 id="puzzleTitle" style="color: var(--accent-cyan);">Select a Puzzle</h3>
-                <p id="puzzleDescription" style="color: var(--text-secondary);"></p>
-            </div>
-            
-            <div id="puzzleSelector" style="display: flex; gap: 10px; justify-content: center; margin-bottom: 20px;">
-                <button class="menu-button" onclick="PuzzleUI.loadPuzzle('basic_1')">Basic</button>
-                <button class="menu-button" onclick="PuzzleUI.loadPuzzle('cipher_2')">Cipher</button>
-                <button class="menu-button" onclick="PuzzleUI.loadPuzzle('matrix_3')">Matrix</button>
-            </div>
-            
-            <div id="puzzleGrid" style="display: grid; gap: 2px; justify-content: center; margin: 20px 0;">
-            </div>
-            
-            <div id="puzzleControls" style="text-align: center; margin: 20px 0;">
-                <div id="numberPad" style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; max-width: 200px; margin: 0 auto 15px;">
-                </div>
-                
-                <div style="display: flex; gap: 10px; justify-content: center;">
-                    <button class="menu-button" onclick="PuzzleUI.validatePuzzle()">Validate</button>
-                    <button class="menu-button" onclick="PuzzleUI.resetPuzzle()">Reset</button>
-                    <button class="menu-button" onclick="PuzzleUI.getHint()">Hint</button>
-                </div>
-            </div>
-            
-            <div id="puzzleStatus" style="text-align: center; min-height: 20px; color: var(--text-secondary);">
-            </div>
-        `;
-        
-        // Store reference for global access
-        window.PuzzleUI = this;
+    return puzzleSystem;
+}
+
+function loadPuzzle(levelId) {
+    const system = initializePuzzleSystem();
+    const puzzle = system.createPuzzle(4, levelId);
+    
+    if (!puzzle) {
+        updatePuzzleStatus('Failed to load puzzle', 'var(--danger-red)');
+        return;
     }
     
-    loadPuzzle(levelId) {
-        const puzzle = this.puzzleSystem.create(4, levelId);
-        if (!puzzle) return;
-        
-        document.getElementById('puzzleTitle').textContent = puzzle.level.name;
-        document.getElementById('puzzleDescription').textContent = `Reward: ${puzzle.level.reward}`;
-        
-        this.renderGrid();
-        this.renderNumberPad();
-        this.updateStatus("Solve the puzzle to unlock the upgrade!");
-    }
+    // Update UI
+    document.getElementById('puzzleTitle').textContent = puzzle.level.name;
+    document.getElementById('puzzleDescription').textContent = 
+        `${puzzle.level.description} • Reward: ${puzzle.level.reward}`;
     
-    renderGrid() {
-        const puzzle = this.puzzleSystem.currentPuzzle;
-        if (!puzzle) return;
-        
-        const grid = document.getElementById('puzzleGrid');
-        grid.style.gridTemplateColumns = `repeat(${puzzle.size}, 1fr)`;
-        grid.style.width = '280px';
-        grid.style.height = '280px';
-        
-        grid.innerHTML = '';
-        
-        for (let r = 0; r < puzzle.size; r++) {
-            for (let c = 0; c < puzzle.size; c++) {
-                const cell = document.createElement('div');
-                const value = puzzle.grid[r][c];
-                const isPreset = this.puzzleSystem.isPresetCell(r, c);
-                
-                cell.style.cssText = `
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    background: ${isPreset ? 'rgba(0, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.5)'};
-                    border: 2px solid ${this.selectedCell && this.selectedCell.r === r && this.selectedCell.c === c ? 'var(--accent-green)' : 'var(--accent-cyan)'};
-                    color: ${isPreset ? 'var(--accent-cyan)' : 'var(--text-primary)'};
-                    font-size: 24px;
-                    font-weight: bold;
-                    cursor: ${isPreset ? 'default' : 'pointer'};
-                    user-select: none;
-                    transition: all 0.2s ease;
-                `;
-                
-                cell.textContent = value === 0 ? '' : value;
-                cell.onclick = () => this.selectCell(r, c);
-                
-                // Add region borders for visual clarity
-                if (r === 1) cell.style.borderBottomWidth = '3px';
-                if (c === 1) cell.style.borderRightWidth = '3px';
-                
-                grid.appendChild(cell);
+    renderPuzzleGrid();
+    renderNumberPad();
+    updatePuzzleStatus('Solve the puzzle to unlock the upgrade!');
+    
+    console.log(`Loaded puzzle: ${puzzle.level.name}`);
+}
+
+function renderPuzzleGrid() {
+    const system = initializePuzzleSystem();
+    const puzzle = system.currentPuzzle;
+    if (!puzzle) return;
+    
+    const grid = document.getElementById('puzzleGrid');
+    grid.style.gridTemplateColumns = `repeat(${puzzle.size}, 1fr)`;
+    grid.innerHTML = '';
+    
+    for (let r = 0; r < puzzle.size; r++) {
+        for (let c = 0; c < puzzle.size; c++) {
+            const cell = document.createElement('div');
+            const value = puzzle.grid[r][c];
+            const isPreset = system.isPresetCell(r, c);
+            const isSelected = system.selectedCell && 
+                              system.selectedCell.r === r && 
+                              system.selectedCell.c === c;
+            
+            cell.className = 'puzzle-cell';
+            if (isPreset) cell.classList.add('preset');
+            if (isSelected) cell.classList.add('selected');
+            
+            cell.textContent = value === 0 ? '' : value;
+            
+            if (!isPreset) {
+                cell.onclick = () => selectPuzzleCell(r, c);
             }
+            
+            // Add region borders for visual clarity (4x4 with 2x2 regions)
+            if (r === 1) cell.style.borderBottomWidth = '4px';
+            if (c === 1) cell.style.borderRightWidth = '4px';
+            
+            grid.appendChild(cell);
         }
     }
+}
+
+function renderNumberPad() {
+    const system = initializePuzzleSystem();
+    const puzzle = system.currentPuzzle;
+    if (!puzzle) return;
     
-    renderNumberPad() {
-        const puzzle = this.puzzleSystem.currentPuzzle;
-        if (!puzzle) return;
+    const pad = document.getElementById('numberPad');
+    pad.innerHTML = '';
+    
+    // Numbers 1-4
+    for (let i = 1; i <= puzzle.size; i++) {
+        const button = document.createElement('button');
+        button.className = 'menu-button';
+        button.textContent = i;
+        button.onclick = () => setPuzzleNumber(i);
+        pad.appendChild(button);
+    }
+    
+    // Clear button
+    const clearButton = document.createElement('button');
+    clearButton.className = 'menu-button';
+    clearButton.textContent = 'CLEAR';
+    clearButton.onclick = () => setPuzzleNumber(0);
+    pad.appendChild(clearButton);
+}
+
+function selectPuzzleCell(row, col) {
+    const system = initializePuzzleSystem();
+    
+    if (system.isPresetCell(row, col)) {
+        updatePuzzleStatus('Cannot modify preset cells', 'var(--accent-orange)');
+        return;
+    }
+    
+    system.selectedCell = { r: row, c: col };
+    renderPuzzleGrid();
+    updatePuzzleStatus(`Selected cell (${row + 1}, ${col + 1})`);
+}
+
+function setPuzzleNumber(value) {
+    const system = initializePuzzleSystem();
+    
+    if (!system.selectedCell) {
+        updatePuzzleStatus('Please select a cell first', 'var(--accent-orange)');
+        return;
+    }
+    
+    const { r, c } = system.selectedCell;
+    
+    if (system.setCell(r, c, value)) {
+        renderPuzzleGrid();
+        const displayValue = value === 0 ? 'cleared' : value;
+        updatePuzzleStatus(`Cell (${r + 1}, ${c + 1}) set to ${displayValue}`);
         
-        const pad = document.getElementById('numberPad');
-        pad.innerHTML = '';
-        
-        // Numbers 1-4
-        for (let i = 1; i <= puzzle.size; i++) {
-            const button = document.createElement('button');
-            button.className = 'menu-button';
-            button.textContent = i;
-            button.onclick = () => this.setNumber(i);
-            pad.appendChild(button);
+        // Auto-validate if puzzle looks complete
+        let hasEmpty = false;
+        const puzzle = system.currentPuzzle;
+        for (let row = 0; row < puzzle.size; row++) {
+            for (let col = 0; col < puzzle.size; col++) {
+                if (puzzle.grid[row][col] === 0) {
+                    hasEmpty = true;
+                    break;
+                }
+            }
+            if (hasEmpty) break;
         }
         
-        // Clear button
-        const clearButton = document.createElement('button');
-        clearButton.className = 'menu-button';
-        clearButton.textContent = 'X';
-        clearButton.style.gridColumn = 'span 2';
-        clearButton.onclick = () => this.setNumber(0);
-        pad.appendChild(clearButton);
+        if (!hasEmpty) {
+            setTimeout(() => validatePuzzle(), 500); // Auto-validate after brief delay
+        }
+    } else {
+        updatePuzzleStatus('Cannot modify this cell', 'var(--danger-red)');
     }
+}
+
+function validatePuzzle() {
+    const system = initializePuzzleSystem();
+    const result = system.validate();
     
-    selectCell(row, col) {
-        if (this.puzzleSystem.isPresetCell(row, col)) return;
+    if (result.valid) {
+        updatePuzzleStatus('🎉 Puzzle solved! Upgrade unlocked!', 'var(--accent-green)');
         
-        this.selectedCell = { r: row, c: col };
-        this.renderGrid();
-    }
-    
-    setNumber(value) {
-        if (!this.selectedCell) {
-            this.updateStatus("Select a cell first!");
-            return;
-        }
+        // Disable the grid to show completion
+        const cells = document.querySelectorAll('.puzzle-cell');
+        cells.forEach(cell => {
+            cell.style.pointerEvents = 'none';
+            cell.style.opacity = '0.8';
+        });
         
-        if (this.puzzleSystem.setCell(this.selectedCell.r, this.selectedCell.c, value)) {
-            this.renderGrid();
-            this.updateStatus(`Set ${this.selectedCell.r + 1},${this.selectedCell.c + 1} = ${value || 'empty'}`);
-        }
+    } else if (result.complete) {
+        updatePuzzleStatus(`❌ Errors found: ${result.errors.join(', ')}`, 'var(--danger-red)');
+    } else {
+        updatePuzzleStatus('⚠️ Puzzle is not yet complete', 'var(--accent-orange)');
     }
+}
+
+function resetPuzzle() {
+    const system = initializePuzzleSystem();
+    system.reset();
+    renderPuzzleGrid();
+    updatePuzzleStatus('Puzzle reset to initial state');
     
-    validatePuzzle() {
-        const result = this.puzzleSystem.validate();
+    // Re-enable the grid
+    const cells = document.querySelectorAll('.puzzle-cell');
+    cells.forEach(cell => {
+        cell.style.pointerEvents = 'auto';
+        cell.style.opacity = '1';
+    });
+}
+
+function getHint() {
+    const system = initializePuzzleSystem();
+    const hint = system.getHint();
+    
+    if (hint) {
+        updatePuzzleStatus(
+            `💡 Hint: Try placing ${hint.value} at row ${hint.row + 1}, column ${hint.col + 1}`, 
+            'var(--accent-orange)'
+        );
         
-        if (result.valid) {
-            this.updateStatus("🎉 Puzzle solved! Upgrade unlocked!", 'var(--accent-green)');
-        } else if (result.complete) {
-            this.updateStatus(`❌ Errors: ${result.errors.join(', ')}`, 'var(--danger-red)');
-        } else {
-            this.updateStatus("⚠️ Puzzle incomplete", 'var(--accent-orange)');
-        }
+        // Auto-select the hint cell
+        system.selectedCell = { r: hint.row, c: hint.col };
+        renderPuzzleGrid();
+    } else {
+        updatePuzzleStatus('No hints available - puzzle may be complete or invalid', 'var(--text-secondary)');
     }
-    
-    resetPuzzle() {
-        this.puzzleSystem.reset();
-        this.selectedCell = null;
-        this.renderGrid();
-        this.updateStatus("Puzzle reset to initial state");
-    }
-    
-    getHint() {
-        const hint = this.puzzleSystem.getHint();
-        if (hint) {
-            this.updateStatus(`💡 Try ${hint.value} at row ${hint.row + 1}, column ${hint.col + 1}`, 'var(--accent-orange)');
-            this.selectedCell = { r: hint.row, c: hint.col };
-            this.renderGrid();
-        } else {
-            this.updateStatus("No hints available");
-        }
-    }
-    
-    updateStatus(message, color = 'var(--text-secondary)') {
-        const status = document.getElementById('puzzleStatus');
+}
+
+function updatePuzzleStatus(message, color = 'var(--text-secondary)') {
+    const status = document.getElementById('puzzleStatus');
+    if (status) {
         status.textContent = message;
         status.style.color = color;
+        console.log('Puzzle status:', message);
     }
 }
 
-// Initialize puzzle system
-let puzzleSystem;
-let puzzleUI;
+// Initialize puzzle system when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+    // Wait a bit for the main game to initialize
+    setTimeout(() => {
+        initializePuzzleSystem();
+    }, 100);
+});
 
-// Auto-initialize if DOM is ready
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializePuzzles);
-} else {
-    initializePuzzles();
-}
-
-function initializePuzzles() {
-    puzzleSystem = new PuzzleSystem();
-    
-    // Register solve callback to integrate with main game
-    puzzleSystem.onSolved((rewardId) => {
-        if (window.Game && Game.purchaseUpgrade) {
-            // Automatically unlock the upgrade
-            Game.unlockedUpgrades.push(rewardId);
-            Game.initializeUpgrades();
-            Game.saveGameData();
-            console.log(`Puzzle reward unlocked: ${rewardId}`);
-        }
-    });
+// Also initialize if DOM is already loaded
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(() => {
+        initializePuzzleSystem();
+    }, 100);
 }
 
 // Export for module systems
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { PuzzleSystem, PuzzleUI };
+    module.exports = { PuzzleSystem, initializePuzzleSystem };
 }
