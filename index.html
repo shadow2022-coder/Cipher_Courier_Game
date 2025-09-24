@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cipher Courier - Prototype</title>
+    <style>
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #151520;
+            --accent-cyan: #00ffff;
+            --accent-green: #00ff88;
+            --accent-orange: #ff8800;
+            --danger-red: #ff4444;
+            --text-primary: #ffffff;
+            --text-secondary: #cccccc;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', monospace;
+            background: linear-gradient(135deg, var(--bg-primary), var(--bg-secondary));
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #gameContainer {
+            position: relative;
+            border: 2px solid var(--accent-cyan);
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
+        }
+
+        #gameCanvas {
+            display: block;
+            background: linear-gradient(180deg, #001122, #000011);
+        }
+
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .hud-section {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--accent-cyan);
+        }
+
+        .hud-left {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .hud-right {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .score { color: var(--accent-green); }
+        .shards { color: var(--accent-orange); }
+        .district { color: var(--accent-cyan); }
+
+        #gameMenu {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 100;
+        }
+
+        #gameMenu h1 {
+            font-size: 3em;
+            color: var(--accent-cyan);
+            text-shadow: 0 0 20px var(--accent-cyan);
+            margin-bottom: 20px;
+        }
+
+        #gameMenu p {
+            font-size: 1.2em;
+            margin-bottom: 30px;
+            color: var(--text-secondary);
+        }
+
+        .menu-button {
+            background: transparent;
+            border: 2px solid var(--accent-green);
+            color: var(--accent-green);
+            padding: 12px 24px;
+            font-family: inherit;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .menu-button:hover {
+            background: var(--accent-green);
+            color: var(--bg-primary);
+            box-shadow: 0 0 15px var(--accent-green);
+        }
+
+        #safehouse {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, #001a1a, #002222);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            padding: 20px;
+        }
+
+        #safehouse h2 {
+            color: var(--accent-cyan);
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+
+        .upgrade-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            max-width: 800px;
+            margin-bottom: 30px;
+        }
+
+        .upgrade-card {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--accent-green);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .upgrade-card h3 {
+            color: var(--accent-green);
+            margin-bottom: 10px;
+        }
+
+        .upgrade-card.owned {
+            border-color: var(--accent-cyan);
+            opacity: 0.7;
+        }
+
+        .upgrade-card.owned h3 {
+            color: var(--accent-cyan);
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* High contrast mode */
+        .high-contrast {
+            --bg-primary: #000000;
+            --bg-secondary: #ffffff;
+            --accent-cyan: #ffff00;
+            --accent-green: #00ff00;
+            --accent-orange: #ff0000;
+            --danger-red: #ff0000;
+            --text-primary: #ffffff;
+            --text-secondary: #000000;
+        }
+
+        @media (max-width: 480px) {
+            #gameCanvas {
+                width: 100vw;
+                height: 60vh;
+            }
+            
+            .hud-section {
+                font-size: 12px;
+                padding: 6px 8px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+        
+        <div id="hud">
+            <div class="hud-left hud-section">
+                <div>District: <span id="district" class="district">East Grid</span></div>
+                <div>Liberation: <span id="liberation" class="district">0%</span></div>
+            </div>
+            <div class="hud-right hud-section">
+                <div>Score: <span id="score" class="score">0</span></div>
+                <div>Shards: <span id="shards" class="shards">0</span></div>
+                <div>Bank: <span id="bankShards" class="shards">0</span></div>
+            </div>
+        </div>
+
+        <div id="gameMenu">
+            <h1>CIPHER COURIER</h1>
+            <p>Deliver encrypted data packets across the neon city</p>
+            <p>Dodge corporate firewalls • Collect key-shards • Liberate the network</p>
+            <button class="menu-button" onclick="Game.start()">START MISSION</button>
+            <button class="menu-button" onclick="Game.showSafehouse()">SAFEHOUSE</button>
+            <button class="menu-button" onclick="Game.toggleHighContrast()">TOGGLE CONTRAST</button>
+        </div>
+
+        <div id="safehouse">
+            <h2>SAFEHOUSE - UPGRADE STATION</h2>
+            <div id="upgradeGrid" class="upgrade-grid"></div>
+            <button class="menu-button" onclick="Game.closeSafehouse()">BACK TO MISSION</button>
+        </div>
+    </div>
+
+    <div class="controls">
+        SPACE: Jump • DOWN: Slide • R: Restart • S: Safehouse • ESC: Menu
+    </div>
+
+    <script src="js/game.js"></script>
+</body>
+</html>
